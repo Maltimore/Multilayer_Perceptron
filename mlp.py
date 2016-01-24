@@ -110,8 +110,8 @@ def train(X, Y=[], hidden_layer_sizes=[], error_deriv="default", n_outputs="defa
 
 # create sample data
 n_data = 100
-x_dimension = 1
-n_loops = 200
+x_dimension = 3
+n_loops = 500
 X = np.matrix((np.random.normal(size=(x_dimension, n_data))))
 Y = np.matrix(np.empty(X.shape[1]))
 for idx, x in enumerate(X.T):
