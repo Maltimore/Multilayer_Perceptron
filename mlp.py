@@ -33,10 +33,12 @@ def classify(X, weights):
         Y_hat[:, data_idx] = output
     return Y_hat
 
-def compute_error(Y, Y_hat, n):
+def compute_error(Y, Y_hat):
+    n = Y.shape[1]
     return (Y_hat - Y) @ (Y_hat - Y).T / n
 
-def train(X, Y=[], hidden_layer_sizes=[], error_deriv="default", n_outputs="default"):
+def train(X, Y=[], hidden_layer_sizes=[], error_deriv="default", n_outputs="default", n_loops=100,
+          eta=.1):
     """ This learning the weights of a multilayer perceptron with the backpropagation 
         algorithm.
         Parameters:
@@ -51,7 +53,10 @@ def train(X, Y=[], hidden_layer_sizes=[], error_deriv="default", n_outputs="defa
         error_deriv: function that takes as input (output, x, y). output is the output that the
             MLP gave for the current input x. y is the current target vector. If Y is specified,
             on the call to train, the error derivative function has to take y as a parameter,
-            otherwise that's not necessary.            
+            otherwise that's not necessary.
+        n_outputs: int, number of units in the output layer
+        n_loops: int, number of times to loop over the training data
+        eta: float, learning rate
     """
     
     # the default error function will be the squared error function, whose derivative is just
@@ -96,17 +101,17 @@ def train(X, Y=[], hidden_layer_sizes=[], error_deriv="default", n_outputs="defa
         
         # update all weight matrices
         for idx in range(len(weights)):    
-            weights[idx] += 1/n_data * delta_W[idx]
+            weights[idx] += eta/n_data * delta_W[idx]
         
         Y_hat = classify(X, weights)
-        error = compute_error(Y, Y_hat, n_data)
+        error = compute_error(Y, Y_hat)
         errorvec[loop] = error
     return weights, errorvec
 
 # create sample data
 n_data = 100
-n_loops = 200
 x_dimension = 1
+n_loops = 200
 X = np.matrix((np.random.normal(size=(x_dimension, n_data))))
 Y = np.matrix(np.empty(X.shape[1]))
 for idx, x in enumerate(X.T):
@@ -115,12 +120,14 @@ for idx, x in enumerate(X.T):
 def bla(output, x, y):
     return output - y
     
-weights, errorvec = train(X, Y, hidden_layer_sizes=[30, 30], error_deriv=bla)
+weights, errorvec = train(X, Y, hidden_layer_sizes=[30, 30], error_deriv=bla, n_loops=n_loops,
+                          eta=1)
 
 plt.figure()
 plt.plot(np.arange(n_loops), errorvec)
 
 Y_hat = classify(X, weights)
+error = compute_error(Y, Y_hat)
 plt.figure()
 plt.plot(X[0,:].T, Y[0,:].T, "x", label="true")
 plt.plot(X[0,:].T, Y_hat[0,:].T, "x", label="predicted")
