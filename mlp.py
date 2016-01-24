@@ -67,7 +67,8 @@ def train(X, Y=[], hidden_layer_sizes=[], error_deriv="default", n_outputs="defa
         error_deriv = square_error_deriv
     
     if len(Y) > 0:
-        n_outputs = Y.shape[0]
+        if n_outputs == "default":
+            n_outputs = Y.shape[0]
     else:
         # setting one y value for the rest of the training
         y = "None"
@@ -122,13 +123,20 @@ def gaussian_mixture_derivative(output, x, y):
     mus = z_mu
     
     # computing phis and pis
-    phis = np.empty(M)
-    print("phis")
-    print(phis)
+    phis = np.matrix(np.empty(M)).T
     for j in range(M):
-        phis[j] = 1/(2*np.pi*sigmas[j]) * np.exp(-((y-mus[j]).T @ (y-mus[j]))/(2*sigmas[j]))
+        phis[j] = 1/(2*np.pi*sigmas[j]) * np.exp(-((y-mus[j])**2) /(2*sigmas[j]))
+    pis = np.multiply(alphas, phis) / (np.sum(np.multiply(alphas, phis)))
     
-    return np.matrix(np.zeros((c+2)*M)).T
+    # error deriv wrt alphas
+    alpha_error = alphas - pis
+    
+    # error deriv wrt sigmas
+    sigma_error = -np.multiply(pis, (((y-mus).T @ (y-mus))/np.square(sigmas) - c))
+    
+    # error deriv wrt mus
+    mu_error = np.multiply(pis, (mus-y)/np.square(sigmas))
+    return np.vstack((alpha_error, sigma_error, mu_error))
     
 
                           
@@ -136,16 +144,17 @@ def gaussian_mixture_derivative(output, x, y):
 n_data = 100
 c = 1
 M = 3
-x_dimension = 3
-y_dimension = (c+2)*M
+x_dimension = 1
+y_dimension = 1
 n_loops = 10
 X = np.matrix(np.random.normal(size=(x_dimension, n_data)))
-Y = np.matrix(np.empty(((c+2)*M, X.shape[1])))
+Y = np.matrix(np.empty((X.shape[1])))
 for idx, x in enumerate(X.T):
     Y[0,idx] = x[0,0]**2 # + np.random.normal(scale=.5)
 
 weights, errorvec = train(X, Y, hidden_layer_sizes=[30, 30],
-                          error_deriv=gaussian_mixture_derivative, n_loops=n_loops, eta=1)
+                          error_deriv=gaussian_mixture_derivative,
+                          n_outputs = (c+2)*M, n_loops=n_loops, eta=1)
 
 plt.figure()
 plt.plot(np.arange(n_loops), errorvec)
