@@ -26,7 +26,8 @@ def forward_propagate(x, weights):
     return layer_activations, output
 
 def classify(X, weights):
-    Y_hat= np.matrix(np.empty((n_data)))
+    output_dimension = weights[-1].shape[0]
+    Y_hat= np.matrix(np.empty((output_dimension, n_data)))
     for data_idx, x in enumerate(X.T):
         x = X[:, data_idx]
         _, output = forward_propagate(x, weights)
@@ -34,8 +35,7 @@ def classify(X, weights):
     return Y_hat
 
 def compute_error(Y, Y_hat):
-    n = Y.shape[1]
-    return (Y_hat - Y) @ (Y_hat - Y).T / n
+    return np.linalg.norm(Y_hat - Y, ord='fro') / (Y.shape[0]*Y.shape[1])
 
 def train(X, Y=[], hidden_layer_sizes=[], error_deriv="default", n_outputs="default", n_loops=100,
           eta=.1):
@@ -108,23 +108,48 @@ def train(X, Y=[], hidden_layer_sizes=[], error_deriv="default", n_outputs="defa
         errorvec[loop] = error
     return weights, errorvec
 
+def gaussian_mixture_derivative(output, x, y):
+    # using notation from the book "Neural Networks for Pattern Recognition" (Bishop, 1995)
+    M = 3 # number of gaussians
+    c = 1 # dimensionality of target variables
+    # extracting output activations
+    z_alpha = output[:M,0]
+    z_sigma = output[M:2*M,0]
+    z_mu = output[2*M:,0]
+    # converting output activations to parameters
+    alphas = np.exp(z_alpha) / np.sum(np.exp(z_alpha))
+    sigmas = np.exp(z_sigma)
+    mus = z_mu
+    
+    # computing phis and pis
+    phis = np.empty(M)
+    print("phis")
+    print(phis)
+    for j in range(M):
+        phis[j] = 1/(2*np.pi*sigmas[j]) * np.exp(-((y-mus[j]).T @ (y-mus[j]))/(2*sigmas[j]))
+    
+    return np.matrix(np.zeros((c+2)*M)).T
+    
+
+                          
 # create sample data
 n_data = 100
+c = 1
+M = 3
 x_dimension = 3
-n_loops = 500
-X = np.matrix((np.random.normal(size=(x_dimension, n_data))))
-Y = np.matrix(np.empty(X.shape[1]))
+y_dimension = (c+2)*M
+n_loops = 10
+X = np.matrix(np.random.normal(size=(x_dimension, n_data)))
+Y = np.matrix(np.empty(((c+2)*M, X.shape[1])))
 for idx, x in enumerate(X.T):
     Y[0,idx] = x[0,0]**2 # + np.random.normal(scale=.5)
 
-def bla(output, x, y):
-    return output - y
-    
-weights, errorvec = train(X, Y, hidden_layer_sizes=[30, 30], error_deriv=bla, n_loops=n_loops,
-                          eta=1)
+weights, errorvec = train(X, Y, hidden_layer_sizes=[30, 30],
+                          error_deriv=gaussian_mixture_derivative, n_loops=n_loops, eta=1)
 
 plt.figure()
 plt.plot(np.arange(n_loops), errorvec)
+plt.savefig('Error_over_iterations.png')
 
 Y_hat = classify(X, weights)
 error = compute_error(Y, Y_hat)
