@@ -25,20 +25,17 @@ def forward_propagate(x, weights):
     layer_activations.append(output)    
     return layer_activations, output
 
-def classify(X, weights):
+def classify(X, weights, output_transformation):
     output_dimension = weights[-1].shape[0]
     Y_hat= np.matrix(np.empty((output_dimension, n_data)))
     for data_idx, x in enumerate(X.T):
         x = X[:, data_idx]
         _, output = forward_propagate(x, weights)
-        Y_hat[:, data_idx] = output
+        Y_hat[:, data_idx] = output_transformation(output)
     return Y_hat
 
-def compute_error(Y, Y_hat):
-    return np.linalg.norm(Y_hat - Y, ord='fro') / (Y.shape[0]*Y.shape[1])
-
 def train(X, Y=[], hidden_layer_sizes=[], error_deriv="default", n_outputs="default", n_loops=100,
-          eta=.1):
+          eta=.1, output_transformation="default", error_function="default"):
     """ This learning the weights of a multilayer perceptron with the backpropagation 
         algorithm.
         Parameters:
@@ -66,6 +63,18 @@ def train(X, Y=[], hidden_layer_sizes=[], error_deriv="default", n_outputs="defa
     if error_deriv == "default":
         error_deriv = square_error_deriv
     
+    # the default error function is the squared error    
+    def square_error(Y, Y_hat):
+        return np.linalg.norm(Y_hat - Y, ord='fro') / (Y.shape[0]*Y.shape[1])
+    if error_function == "default":
+        error_function = square_error
+
+    # the default output transformatoin is none
+    def none_transformation(output):
+        return output
+    if output_transformation == "default":
+        output_transformation = none_transformation
+
     if len(Y) > 0:
         if n_outputs == "default":
             n_outputs = Y.shape[0]
@@ -104,12 +113,46 @@ def train(X, Y=[], hidden_layer_sizes=[], error_deriv="default", n_outputs="defa
         for idx in range(len(weights)):    
             weights[idx] += eta/n_data * delta_W[idx]
         
-        Y_hat = classify(X, weights)
-        error = compute_error(Y, Y_hat)
-        errorvec[loop] = error
+        Y_hat = classify(X, weights, output_transformation)
+        errorvec[loop] = error_function(Y, Y_hat)
     return weights, errorvec
 
-def gaussian_mixture_derivative(output, x, y):
+def GMM_derivative(output, x, y):
+    # using notation from the book "Neural Networks for Pattern Recognition" (Bishop, 1995)
+    M = 3 # number of gaussians
+    c = 1 # dimensionality of target variables
+    # extracting output activations
+    z_alpha = output[:M,0]
+    z_sigma = output[M:2*M,0]
+    z_mu = output[2*M:,0]
+    # converting output activations to parameters
+    alphas = np.exp(z_alpha) / np.sum(np.exp(z_alpha))
+    sigmas = np.exp(z_sigma)
+    print("sigmas")
+    print(sigmas)
+    mus = z_mu
+    
+    # computing phis and pis
+    phis = np.matrix(np.empty(M)).T
+    for j in range(M):
+        phis[j] = 1/(2*np.pi*sigmas[j]) * np.exp(-((y-mus[j])**2) /(2*sigmas[j]))
+    pis = np.multiply(alphas, phis) / (np.sum(np.multiply(alphas, phis)))
+    print("pis")
+    print(pis)
+    print(np.sum(pis))
+    # error deriv wrt alphas
+    alpha_error = alphas - pis
+    print("alpha_deriv:")
+    print(alpha_error)
+    # error deriv wrt sigmas
+    sigma_error = -np.multiply(pis, (((y-mus).T @ (y-mus))/np.square(sigmas) - c))
+    print("sigma_deriv:")
+    print(sigma_error)    
+    # error deriv wrt mus
+    mu_error = np.multiply(pis, (mus-y)/np.square(sigmas))
+    return np.vstack((alpha_error, sigma_error, mu_error))
+    
+def GMM_output_transformation(output):
     # using notation from the book "Neural Networks for Pattern Recognition" (Bishop, 1995)
     M = 3 # number of gaussians
     c = 1 # dimensionality of target variables
@@ -121,24 +164,28 @@ def gaussian_mixture_derivative(output, x, y):
     alphas = np.exp(z_alpha) / np.sum(np.exp(z_alpha))
     sigmas = np.exp(z_sigma)
     mus = z_mu
-    
-    # computing phis and pis
-    phis = np.matrix(np.empty(M)).T
-    for j in range(M):
-        phis[j] = 1/(2*np.pi*sigmas[j]) * np.exp(-((y-mus[j])**2) /(2*sigmas[j]))
-    pis = np.multiply(alphas, phis) / (np.sum(np.multiply(alphas, phis)))
-    
-    # error deriv wrt alphas
-    alpha_error = alphas - pis
-    
-    # error deriv wrt sigmas
-    sigma_error = -np.multiply(pis, (((y-mus).T @ (y-mus))/np.square(sigmas) - c))
-    
-    # error deriv wrt mus
-    mu_error = np.multiply(pis, (mus-y)/np.square(sigmas))
-    return np.vstack((alpha_error, sigma_error, mu_error))
-    
 
+    return np.vstack((alphas, sigmas, mus))
+
+def GMM_error_function(Y, Y_hat):
+    # this implementation is horrible. Change asap.
+    M = 3
+    c = 1
+        
+    error = 0
+    for data_idx in np.arange(Y_hat.shape[1]):
+        for comp_idx in np.arange(M):
+            y = Y[0,data_idx]
+            curr_Y_hat = Y_hat[:,data_idx]
+            alpha = curr_Y_hat[comp_idx]
+            sigma = float(curr_Y_hat[comp_idx + M])
+            print("sigma"  + str(sigma))
+            mu    = curr_Y_hat[comp_idx + 2*M]
+            prefactor = 1/((2*np.pi)**(c/2)*sigma**c)
+            phi = prefactor * np.exp(-(y-mu)**2/(2*sigma**2))
+            error += np.log( alpha * phi )
+        
+    return -error
                           
 # create sample data
 n_data = 100
@@ -147,23 +194,30 @@ M = 3
 x_dimension = 1
 y_dimension = 1
 n_loops = 10
+hidden_layer_sizes = [30]
+eta=.1
 X = np.matrix(np.random.normal(size=(x_dimension, n_data)))
 Y = np.matrix(np.empty((X.shape[1])))
 for idx, x in enumerate(X.T):
     Y[0,idx] = x[0,0]**2 # + np.random.normal(scale=.5)
 
-weights, errorvec = train(X, Y, hidden_layer_sizes=[30, 30],
-                          error_deriv=gaussian_mixture_derivative,
-                          n_outputs = (c+2)*M, n_loops=n_loops, eta=1)
+weights, errorvec = train(X, Y, hidden_layer_sizes=hidden_layer_sizes,
+                          error_deriv=GMM_derivative,
+                          n_outputs = (c+2)*M, n_loops=n_loops, eta=eta,
+                          output_transformation = GMM_output_transformation,
+                          error_function = GMM_error_function)
 
 plt.figure()
 plt.plot(np.arange(n_loops), errorvec)
 plt.savefig('Error_over_iterations.png')
 
-Y_hat = classify(X, weights)
-error = compute_error(Y, Y_hat)
-plt.figure()
-plt.plot(X[0,:].T, Y[0,:].T, "x", label="true")
-plt.plot(X[0,:].T, Y_hat[0,:].T, "x", label="predicted")
-plt.legend()
-plt.title("Error is: " + str(error))
+#Y_hat = classify(X, weights, GMM_output_transformation)
+#error = GMM_error_function(Y, Y_hat)
+#plt.figure()
+#plt.plot(X[0,:].T, Y[0,:].T, "x", label="true")
+#plt.plot(X[0,:].T, Y_hat[0,:].T, "x", label="predicted")
+#plt.legend()
+#plt.title("Error is: " + str(error))
+#
+#plt.figure()
+#plt.scatter(Y[0,:], Y_hat[0,:])
