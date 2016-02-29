@@ -1,5 +1,5 @@
 This is an implementation of a multilayer perceptron. There are dozens of implementations of multilayer perceptrons out there that all learn via backpropagation, so why did I make another one?
-One of the goals behind this project was just to understand how backpropagation works. The training is neither particularly elegant or fast, but it works (and it's actually still a bit faster than lots of other implementations because it only uses vector/matrix operations and few loops. But the other reason was that I wanted to implement an MLP that accepts arbitrary error functions to evaluate the output. I'm not aware of any general MLP implementation in Python where the user can specify arbitrary error functions / error derivative functions.
+The reason that I implemented this MLP was that I wanted to implement an MLP that accepts arbitrary error functions / derivatives as error functions to evaluate the output. I'm not aware of any general MLP implementation in Python where the user can specify arbitrary error functions / error derivative functions.
 The features of this MLP are that it
 - can have arbitrarily many layers with arbitrarily many units in every layer, fully determined by the user
-- accpets custom error derivative 
+- accepts custom error derivative 
